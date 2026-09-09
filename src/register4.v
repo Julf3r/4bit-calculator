@@ -1,19 +1,18 @@
 module register4 (
     input        clk,
-    input        ejecutar,
-    input  [3:0] nuevo,
+    input        enable,
+    input  [3:0] d,
     output reg [3:0] q
 );
-
     wire [3:0] next_q;
 
-    mux2 m0(q[0], nuevo[0], ejecutar, next_q[0]);
-    mux2 m1(q[1], nuevo[1], ejecutar, next_q[1]);
-    mux2 m2(q[2], nuevo[2], ejecutar, next_q[2]);
-    mux2 m3(q[3], nuevo[3], ejecutar, next_q[3]);
+    // enable selecciona entre mantener q o cargar d.
+    mux2 m0 (.a(q[0]), .b(d[0]), .sel(enable), .y(next_q[0]));
+    mux2 m1 (.a(q[1]), .b(d[1]), .sel(enable), .y(next_q[1]));
+    mux2 m2 (.a(q[2]), .b(d[2]), .sel(enable), .y(next_q[2]));
+    mux2 m3 (.a(q[3]), .b(d[3]), .sel(enable), .y(next_q[3]));
 
     always @(posedge clk) begin
-        q <= next_q;
+        q = next_q;
     end
-
 endmodule

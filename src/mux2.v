@@ -4,7 +4,6 @@ module mux2 (
     input  sel,
     output y
 );
-
     wire nsel;
     wire ya;
     wire yb;
@@ -13,5 +12,4 @@ module mux2 (
     and (ya, a, nsel);
     and (yb, b, sel);
     or  (y, ya, yb);
-
 endmodule

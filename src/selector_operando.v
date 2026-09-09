@@ -4,16 +4,12 @@ module selector_operando (
     input  r,
     output f
 );
-
-    wire not_h;
-    wire use_b;
-    wire use_r;
-
-    not (not_h, h);
-
-    and (use_b, not_h, b);
-    and (use_r, h, r);
-
-    or (f, use_b, use_r);
-
+    // h = 0 -> operando externo b
+    // h = 1 -> resultado anterior r
+    mux2 m0 (
+        .a(b),
+        .b(r),
+        .sel(h),
+        .y(f)
+    );
 endmodule
