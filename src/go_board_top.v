@@ -277,6 +277,8 @@ module go_board_top (
     // ============================================================
 
     wire [3:0] display_value;
+    wire [3:0] display_magnitude;
+    wire c1_mag, c2_mag, c3_mag, cout_mag;
 
     display_selector display_sel (
         .state(state),
@@ -286,6 +288,45 @@ module go_board_top (
         .value(display_value)
     );
 
+
+    wire [3:0] display_xor_sign;
+
+    xor (display_xor_sign[0], display_value[0], display_value[3]);
+    xor (display_xor_sign[1], display_value[1], display_value[3]);
+    xor (display_xor_sign[2], display_value[2], display_value[3]);
+    xor (display_xor_sign[3], display_value[3], display_value[3]);
+
+    full_adder mag0 (
+        .a(display_xor_sign[0]),
+        .b(1'b0),
+        .cin(display_value[3]),
+        .sum(display_magnitude[0]),
+        .cout(c1_mag)
+    );
+
+    full_adder mag1 (
+        .a(display_xor_sign[1]),
+        .b(1'b0),
+        .cin(c1_mag),
+        .sum(display_magnitude[1]),
+        .cout(c2_mag)
+    );
+
+    full_adder mag2 (
+        .a(display_xor_sign[2]),
+        .b(1'b0),
+        .cin(c2_mag),
+        .sum(display_magnitude[2]),
+        .cout(c3_mag)
+    );
+
+    full_adder mag3 (
+        .a(display_xor_sign[3]),
+        .b(1'b0),
+        .cin(c3_mag),
+        .sum(display_magnitude[3]),
+        .cout(cout_mag)
+    );
 
     // ============================================================
     // DISPLAY HEXADECIMAL
@@ -299,8 +340,9 @@ module go_board_top (
     wire hex_f;
     wire hex_g;
 
+
     hex7seg hex_display (
-        .value(display_value),
+        .value(display_magnitude),
 
         .a(hex_a),
         .b(hex_b),
@@ -350,7 +392,6 @@ module go_board_top (
     buf (o_LED_3, codigo[0]);
 
     buf (o_LED_4, zero);
-
 
     // ============================================================
     // SALIDAS FÍSICAS 7-SEGMENT
