@@ -1,21 +1,17 @@
 # 4-Bit Calculator on FPGA
 
-Proyecto 1 de **Arquitectura de Computadores**: diseño e implementación de una calculadora de 4 bits en **Verilog** para una **Lattice iCE40 HX1K** de la **Nandland Go Board**.
+Proyecto 1 de **Arquitectura de Computadores** de la Universidad de los Andes.  
+El objetivo es diseñar una calculadora de 4 bits en **Verilog**, utilizando lógica implementada mediante compuertas, simularla con un testbench y posteriormente implementarla en una **Nandland Go Board** con FPGA **Lattice iCE40 HX1K**.
 
-## Objetivo
+## Integrantes
 
-Implementar una calculadora capaz de operar con números de 4 bits, incluyendo números negativos en complemento a dos, recorriendo el flujo completo de diseño digital:
-
-- diseño mediante tablas de verdad y mapas de Karnaugh;
-- implementación de lógica mediante compuertas;
-- descripción del circuito en Verilog;
-- simulación mediante testbench;
-- visualización de señales en GTKWave;
-- síntesis, programación y demostración en la FPGA.
+- Julián Rodríguez
+- Alfonso Villanueva
+- Manuel Caroca
 
 ## Operaciones soportadas
 
-| Código | Operación | Resultado |
+| Código | Operación | Comportamiento |
 |---|---|---|
 | `3'b000` | Reinicio | `R = 4'b0000` |
 | `3'b001` | Suma | `R = A + B` |
@@ -24,79 +20,124 @@ Implementar una calculadora capaz de operar con números de 4 bits, incluyendo n
 | `3'b100` | Shift left | `R = A << B[1:0]` |
 | `3'b101` | Shift right | `R = A >> B[1:0]` |
 
-Todos los cálculos utilizan 4 bits. En caso de overflow, se conservan únicamente los cuatro bits menos significativos del resultado.
+Las expresiones anteriores describen únicamente el **comportamiento esperado**. La implementación combinacional no utiliza directamente operadores de alto nivel como `+`, `-`, `<<`, `>>`, `if`, `case` o `?:`.
 
-> **Importante:** las expresiones anteriores describen el comportamiento esperado. La lógica combinacional sintetizable del proyecto se implementa exclusivamente mediante compuertas lógicas permitidas por el enunciado, sin utilizar directamente operadores de alto nivel como `+`, `-`, `<<`, `>>`, `if`, `case` o `?:`.
+Todos los cálculos utilizan 4 bits. En caso de overflow, se conservan los cuatro bits menos significativos.
 
-## Estructura del repositorio
+## Arquitectura
+
+El núcleo de la calculadora recibe:
+
+- `op1`: primer operando de 4 bits;
+- `op2_ext`: segundo operando externo de 4 bits;
+- `codigo`: selector de operación de 3 bits;
+- `sel_op2`: selecciona entre `op2_ext` y el resultado almacenado previamente;
+- `ejecutar`: habilita el almacenamiento del nuevo resultado;
+- `clk`: reloj del registro de resultado.
+
+La arquitectura general es:
+
+```text
+op2_ext ─────────────┐
+                     ▼
+resultado ───► selector_operando
+                     │
+                     ▼
+               segundo operando
+                     │
+          ┌──────────┴───────────┐
+          │                      │
+          ▼                      ▼
+   selector_suma           shift left/right
+          │                      │
+       X, Y, Cin                  │
+          │                      │
+          ▼                      │
+   Full Adders x4                │
+    Cout -> Cin                  │
+          │                      │
+        sigma                    │
+          └──────────┬───────────┘
+                     ▼
+             selector_resultado
+                     │
+              resultado_comb
+                     │
+                     ▼
+                 register4
+                     │
+                     ▼
+                 resultado
+```
+
+### Operaciones aritméticas
+
+Las cuatro operaciones con `codigo[2] = 0` utilizan los mismos cuatro full adders.
+
+| `codigo[1:0]` | X | Y | `Cin` inicial | Operación |
+|---|---|---|---|---|
+| `00` | `0` | `0` | `0` | Reinicio |
+| `01` | `A` | `B` | `0` | Suma |
+| `10` | `A` | `~B` | `1` | Resta |
+| `11` | `~A` | `B` | `1` | Resta inversa |
+
+Las restas se implementan mediante complemento a dos.
+
+### Shifts
+
+Los desplazamientos se implementan mediante multiplexores construidos con compuertas. No se utilizan los operadores `<<` ni `>>`.
+
+`B[1:0]` determina la cantidad de posiciones:
+
+```text
+00 -> 0 posiciones
+01 -> 1 posición
+10 -> 2 posiciones
+11 -> 3 posiciones
+```
+
+Los espacios vacíos se rellenan con ceros.
+
+## Estructura actual del repositorio
 
 ```text
 4bit-calculator/
 ├── README.md
-├── apio.ini
+├── Makefile
 ├── .gitignore
 │
 ├── src/
-│   ├── calculator.v
-│   ├── alu.v
+│   ├── calculadora_4bits.v
 │   ├── full_adder.v
-│   └── seven_segment.v
+│   ├── mux2.v
+│   ├── mux4.v
+│   ├── mux4_1bit.v
+│   ├── register4.v
+│   ├── selector_operando.v
+│   ├── selector_resultado.v
+│   ├── selector_resultado4.v
+│   ├── selector_shift.v
+│   ├── selector_shift4.v
+│   ├── selector_suma.v
+│   ├── shift_left4.v
+│   └── shift_right4.v
 │
 ├── tb/
-│   ├── calculator_tb.v
-│   ├── alu_tb.v
-│   └── full_adder_tb.v
+│   ├── calculadora_4bits_tb_basico.sv
+│   └── calculadora_4bits_tb_completo.sv
 │
+├── build/
 ├── constraints/
-│   └── go_board.pcf
-│
-├── docs/
-│   ├── truth_tables.md
-│   ├── karnaugh.md
-│   └── architecture.md
-│
-├── report/
-│   └── report.pdf
-│
-└── build/
+└── docs/
 ```
 
-- `src/`: módulos Verilog sintetizables que forman el circuito real.
-- `tb/`: testbenches utilizados únicamente para simulación.
-- `constraints/`: asignación entre señales del diseño y pines físicos de la Go Board.
-- `docs/`: tablas de verdad, mapas de Karnaugh, expresiones booleanas y documentación de arquitectura.
-- `report/`: informe final en PDF.
-- `build/`: archivos generados durante simulación y síntesis. No se versionan en Git.
-
-## Arquitectura general
-
-La calculadora recibe:
-
-- `op1`: primer operando de 4 bits;
-- `operation`: selector de operación de 3 bits;
-- `op2`: segundo operando externo de 4 bits;
-- un selector que permite utilizar como segundo operando `op2` o el resultado anterior;
-- una señal de confirmación/ejecución.
-
-El resultado se almacena en un registro de 4 bits para permitir utilizarlo posteriormente como segundo operando.
-
-Una posible jerarquía de módulos es:
-
-```text
-calculator
-├── alu
-│   ├── full_adder / adder
-│   ├── subtractor
-│   ├── shifter
-│   └── selección de operación
-├── result_register
-├── input/control logic
-└── seven_segment
-```
+`src/` contiene los módulos sintetizables del circuito.  
+`tb/` contiene los testbenches y se utiliza únicamente para simulación.  
+`build/` contiene archivos generados durante la compilación/simulación.
 
 ## Restricciones de implementación
 
-La lógica combinacional debe implementarse utilizando exclusivamente primitivas de compuertas de Verilog:
+La lógica combinacional se implementa utilizando primitivas de compuertas de Verilog, entre ellas:
 
 ```text
 and
@@ -109,7 +150,7 @@ xnor
 buf
 ```
 
-No deben utilizarse directamente en la lógica combinacional sintetizable:
+No se utilizan directamente en la implementación combinacional:
 
 ```text
 +
@@ -125,166 +166,163 @@ if
 case
 ```
 
-Por ejemplo, la suma de 4 bits debe construirse a partir de sumadores implementados mediante compuertas, en lugar de escribirse como:
+Por ejemplo, la suma se implementa mediante cuatro `full_adder` conectados como un **ripple-carry adder**:
 
-```verilog
-assign result = A + B; // No permitido para la implementación de la operación
+```text
+Cin -> FA0 -> FA1 -> FA2 -> FA3
+        |      |      |      |
+       S0     S1     S2     S3
 ```
 
-## Herramientas
+## Requisitos para simulación
 
-El proyecto puede trabajarse desde WSL utilizando:
-
-- Icarus Verilog (`iverilog`) para simulación;
-- GTKWave para visualizar señales;
-- Yosys para síntesis;
-- nextpnr-ice40 para place-and-route;
-- Project IceStorm para generar el bitstream;
-- APIO como interfaz para automatizar el flujo de FPGA.
-
-## Instalación en WSL
+En Ubuntu/WSL:
 
 ```bash
 sudo apt update
-sudo apt install -y \
-    iverilog \
-    gtkwave \
-    yosys \
-    nextpnr-ice40 \
-    fpga-icestorm \
-    python3 \
-    python3-pip \
-    python3-venv
+sudo apt install -y iverilog gtkwave make
 ```
 
-Para APIO:
-
-```bash
-python3 -m venv ~/.venvs/apio
-source ~/.venvs/apio/bin/activate
-pip install --upgrade pip
-pip install apio
-```
-
-Cada vez que se abra una nueva terminal y se quiera usar APIO:
-
-```bash
-source ~/.venvs/apio/bin/activate
-```
-
-## Simulación
-
-### Calculadora completa
+## Ejecutar los tests
 
 Desde la raíz del repositorio:
 
-```bash
-mkdir -p build
-
-iverilog \
-    -o build/calculator_tb \
-    src/*.v \
-    tb/calculator_tb.v
-
-vvp build/calculator_tb
-```
-
-El testbench debe generar un archivo VCD, por ejemplo:
-
-```verilog
-initial begin
-    $dumpfile("build/calculator.vcd");
-    $dumpvars(0, calculator_tb);
-end
-```
-
-Para visualizar las señales:
+### Testbench básico
 
 ```bash
-gtkwave build/calculator.vcd
+make basic
 ```
 
-### Testbench de un módulo individual
+Comprueba principalmente las operaciones aritméticas básicas y casos con números negativos y overflow.
 
-Ejemplo para `full_adder`:
+### Testbench completo
 
 ```bash
-iverilog \
-    -o build/full_adder_tb \
-    src/full_adder.v \
-    tb/full_adder_tb.v
-
-vvp build/full_adder_tb
-
-gtkwave build/full_adder.vcd
+make full
 ```
 
-## Build para FPGA
+Comprueba:
 
-Si el proyecto está configurado mediante APIO:
+- reinicio;
+- suma;
+- resta;
+- resta inversa;
+- shift left;
+- shift right;
+- reutilización del resultado anterior mediante `sel_op2`.
+
+## Visualización en GTKWave
+
+Los testbenches generan archivos `.vcd` con las señales de la simulación.
+
+Después de ejecutar el testbench completo:
 
 ```bash
-apio build
+gtkwave calculadora_4bits_tb_completo.vcd
 ```
 
-Para programar la Go Board:
+Se recomienda observar al menos:
 
-```bash
-apio upload
+```text
+clk
+ejecutar
+codigo
+sel_op2
+op1
+op2_ext
+resultado
 ```
 
-La placa debe estar conectada por USB y disponible dentro de WSL antes de ejecutar `apio upload`.
+También pueden observarse señales internas del DUT, como:
 
-## Interfaz física de la Go Board
+```text
+f
+x
+y
+sigma
+left_value
+right_value
+shift_value
+resultado_comb
+```
 
-La demostración utiliza los cuatro botones de la placa:
-
-- **superior izquierdo:** incrementar el valor seleccionado;
-- **inferior izquierdo:** disminuir el valor seleccionado;
-- **superior derecho:** confirmar/ingresar el valor seleccionado;
-- **inferior derecho:** utilizar el resultado de la operación anterior como segundo operando.
-
-El flujo de entrada es:
-
-1. seleccionar la operación;
-2. mostrar el código de operación en los LED;
-3. ingresar el primer operando;
-4. ingresar el segundo operando;
-5. ejecutar la operación;
-6. mostrar el resultado en los displays de siete segmentos.
-
-El primer display indica el signo y el segundo muestra el valor en hexadecimal.
-
-Después de mostrar el resultado, una nueva pulsación del botón de confirmación devuelve la calculadora al estado inicial.
+Estas señales permiten seguir el recorrido de los operandos por los selectores, full adders, shifters y registro de resultado.
 
 ## Testbench
 
-El testbench principal se encuentra en:
+El testbench básico se encuentra en:
 
 ```text
-tb/calculator_tb.v
+tb/calculadora_4bits_tb_basico.sv
 ```
 
-Durante la demostración, los valores y las operaciones indicados por el profesor deben ingresarse en este testbench antes de ejecutar la simulación y visualizarla en GTKWave.
+El testbench completo se encuentra en:
 
-El testbench no forma parte del hardware sintetizado y, por lo tanto, no debe incluirse como fuente para la implementación física de la FPGA.
+```text
+tb/calculadora_4bits_tb_completo.sv
+```
+
+Los testbenches están escritos en **SystemVerilog**, por lo que Icarus Verilog se ejecuta con soporte `-g2012`.
+
+El testbench no forma parte del hardware sintetizado.
+
+## Estado actual
+
+Actualmente se encuentra implementado y probado mediante simulación el **núcleo lógico de la calculadora**, incluyendo:
+
+- suma;
+- resta;
+- resta inversa;
+- shift left;
+- shift right;
+- reinicio;
+- registro de resultado;
+- reutilización del resultado anterior.
+
+La integración física con la Go Board —control mediante botones, displays de siete segmentos, LEDs, constraints de pines y programación de la FPGA— corresponde a la siguiente etapa del proyecto.
+
+## FPGA
+
+La placa objetivo es:
+
+```text
+Nandland Go Board
+Lattice iCE40 HX1K
+ICE40HX1K-VQ100
+```
+
+La disposición de botones utilizada por el proyecto es:
+
+```text
+SW1   SW3
+SW2   SW4
+```
+
+con la interfaz requerida:
+
+```text
+SW1 -> incrementar
+SW2 -> disminuir
+SW3 -> confirmar
+SW4 -> utilizar resultado anterior
+```
+
+Para la implementación física se utilizará APIO junto con el toolchain open-source para iCE40.
 
 ## Documentación
 
-El informe del proyecto debe incluir, como mínimo:
+El informe del proyecto incluye el desarrollo lógico utilizado para obtener la implementación, incluyendo:
 
-- diseño general y arquitectura de la calculadora;
+- arquitectura general;
 - tablas de verdad;
 - mapas de Karnaugh;
-- expresiones booleanas obtenidas;
-- implementación de las operaciones mediante compuertas;
-- resultados relevantes de simulación.
-
-## Autores
-
-- Julián  Rodríguez
-- Alfonso Villanueva
-- Manuel Caroca
+- expresiones booleanas;
+- full adder;
+- selección de operaciones;
+- desplazamientos;
+- selectores;
+- implementación mediante compuertas;
+- resultados de simulación.
 
 ## Curso
 
